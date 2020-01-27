@@ -378,7 +378,12 @@ void doaction(){
 		{
 		  Serial.print (" Arrosage manuel" + MonBuffer);
 		int MonArro =  MonBuffer.substring(6,7).toInt();
-		Serial.print(" Action ");
+		Serial.print(" Action ");     
+
+
+
+
+    
 		Serial.println(MonBuffer.substring(7,11));
 		if (MonBuffer.substring(7,11) == "true") 
 			{
@@ -387,7 +392,7 @@ void doaction(){
 			digitalWrite(MonArro+5,HIGH); 
 			PBSend(1,  MonArro,0);
 			DemManuel[MonArro]= millis();  
-      
+
 			Prevenu[MonArro]=false;
 			ReponseServeur("arro"+String(MonArro)+"on");
 
