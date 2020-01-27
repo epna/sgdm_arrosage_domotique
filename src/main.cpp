@@ -386,7 +386,8 @@ void doaction(){
 			Trace("HIGH "   + String(MonArro) );
 			digitalWrite(MonArro+5,HIGH); 
 			PBSend(1,  MonArro,0);
-			DemManuel[MonArro]= millis();
+			DemManuel[MonArro]= millis();  
+      
 			Prevenu[MonArro]=false;
 			ReponseServeur("arro"+String(MonArro)+"on");
 
