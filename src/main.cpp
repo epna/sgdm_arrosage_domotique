@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <Wire.h>         
 #include <NTPClient.h>
-#include <ArduinoJson.h>
+
 #include <string.h>
 #include <stdio.h>
 
@@ -76,6 +76,9 @@ void ReponseServeur(String MonParam) {
 	      		{
 	      		  client.print("{\"duree\": \"-1\",");
 	      		  client.print("\"actif\": \"off\"}");
+
+	      		  Serial.print("{\"duree\": \"-1\",");
+	      		  Serial.print("\"actif\": \"off\"}");
 	      		}
 			    else
 			      {
@@ -83,6 +86,10 @@ void ReponseServeur(String MonParam) {
 			      client.print((millis()-DemManuel[Idx])/60000);
 			      client.print("\",");
       		  client.print("\"actif\": \"on\"}");
+			      Serial.print("{\"duree\": \""); 
+			      Serial.print((millis()-DemManuel[Idx])/60000);
+			      Serial.print("\",");
+      		  Serial.print("\"actif\": \"on\"}");
 
 			      }
 		}
@@ -158,17 +165,23 @@ void Trace( String MaTrace)
  }
 ////////////////////////////////////////////
 
-void PBSend(int codemess, int arro, int porte )
+void messageFCM(int codemess, int arro, int porte )
 {
     if (client3.connect("boat.alwaysdata.net", 80))
 		{   
-        client3.println("GET /sgdmdomo.php?action=message&codemess=" + String(codemess) + "&porte=" + String(porte) + "&arro=" + String(arro) +  " HTTP/1.1" );
-        Serial.println("GET /sgdmdomo.php?action=message&codemess=" + String(codemess) + "&porte=" + String(porte) + "&arro=" + String(arro) +  " HTTP/1.1" );
+        
+        client3.println("POST /sendFCM.php?message=" + String(codemess) +  "&arroseur=" + String(arro) +  " HTTP/1.1" );
+        Serial.println("POST /sendFCM.php?message=" + String(codemess) +  + "&arroseur=" + String(arro) +  " HTTP/1.1" );
 		    client3.println("Host: boat.alwaysdata.net");
 		    client3.println("Connection: close");
 	    	client3.println();
+        delay(50);
+        while (client3.available())
+          {
+            char cc = client3.read();
+              Serial.write(cc); 
+          }
         client3.stop(); 
-        delay(5);
 		} 
 }
 
@@ -208,7 +221,7 @@ void Automate ()
 			            {
 			              int xxx = Arro[yy].Aarroseur+5;
 			              Trace("Démarrage automatique de " + String(Arro[yy].Akey)+ "  "+ String(xxx));
-			              PBSend(3,Arro[yy].Aarroseur,0);
+			              messageFCM(3,Arro[yy].Aarroseur,0);
 			              digitalWrite(xxx,HIGH);
 			              Arro[yy].Automatique=true;
                   }
@@ -221,7 +234,7 @@ void Automate ()
         if ((arr_fin < MinuteNow) and (Arro[yy].Automatique))
           {  
             Trace("Arret automatique de " + String(Arro[yy].Akey));
-	  	      PBSend(4,Arro[yy].Aarroseur,0 );
+	  	      messageFCM(4,Arro[yy].Aarroseur,0 );
 	  	      digitalWrite(Arro[yy].Aarroseur+5,LOW);
             Arro[yy].Automatique=false;
           }
@@ -311,12 +324,26 @@ int ParsePayload(int transfo)
     }
   if (transfo==2)
     {
-      MaxManuel1 = 30 ; 
-      MaxManuel2 = 60;  
-      Serial.print("Max1 ");
-      Serial.println(MaxManuel1);
-      Serial.print("Max2 ");
-      Serial.println(MaxManuel2);
+       Serial.println(strJSON);  
+      int PL_debut = strJSON.indexOf("max1") +6   ; 
+      int PL_fin = strJSON.indexOf(","); 
+      String PL_temp  = strJSON.substring(PL_debut, PL_fin) ;
+      MaxManuel1= PL_temp.toInt();
+
+        
+      Serial.print(" Max Waring "); 
+      Serial.println(MaxManuel1); 
+      
+      PL_debut= strJSON.indexOf("max2")+6; 
+      PL_temp= strJSON.substring(PL_debut); 
+      MaxManuel2=PL_temp.toInt(); 
+      
+      Serial.println(PL_debut);
+
+
+      Serial.print(" Max arrêt "); 
+      Serial.println(MaxManuel2);  
+
     }
   return 0; 
 }
@@ -335,8 +362,9 @@ void SendHTTPRequest(String req, int transfo) {
     client2.println();
   } else {
     // if you didn't get a connection to the server:
-    Serial.println("connection failed");
+    Serial.println("Connexion impossible à la base de donnéés ");
   }
+  
   delay(1000);
   ecrire=false;
   strJSON="";
@@ -390,7 +418,7 @@ void doaction(){
 			Manuel[MonArro]=true;
 			Trace("HIGH "   + String(MonArro) );
 			digitalWrite(MonArro+5,HIGH); 
-			PBSend(1,  MonArro,0);
+			messageFCM(1,  MonArro,0);
 			DemManuel[MonArro]= millis();  
 
 			Prevenu[MonArro]=false;
@@ -403,7 +431,7 @@ void doaction(){
 			Trace("LOWXXXX"   + String(MonArro) );
 			DemManuel[MonBuffer.substring(6,7).toInt()]= 0;
 			digitalWrite(MonArro+5,LOW);
-			PBSend(2,MonArro,0);
+			messageFCM(2,MonArro,0);
 			ReponseServeur("arro"+String(MonArro)+"off");
 			}
 		}
@@ -487,10 +515,16 @@ void doaction(){
 		{
 		ReponseServeur("getstatus");
 		}
-			if (MonBuffer.indexOf("refresh") > 0) 
+	if (MonBuffer.indexOf("modiflistemax") > 0) 
 		{
-		SendHTTPRequest("GET /sgdmdomo.php?action=listeperiode HTTP/1.1",1);
+      SendHTTPRequest("GET /sgdmdomo.php?action=listemax HTTP/1.1",2);
 		ReponseServeur("getstatus");
+		}
+	if (MonBuffer.indexOf("refresh") > 0) 
+		{
+		  SendHTTPRequest("GET /sgdmdomo.php?action=listeperiode HTTP/1.1",1);
+      SendHTTPRequest("GET /sgdmdomo.php?action=listemax HTTP/1.1",2);
+      ReponseServeur("getstatus");
 		}
 }
 
@@ -563,14 +597,14 @@ for (int Idx = 0; Idx < 4; Idx++)
 		Trace( "Arret force "   + String(Idx) );
 		DemManuel[Idx]=0;
 		digitalWrite(Idx+5,LOW);
-		PBSend(5,Idx,0);
+		messageFCM(5,Idx,0);
 		}
         else
 		if (((millis()-DemManuel[Idx])/60000 > MaxManuel1) && (!Prevenu[Idx]))
         {
 
 		Prevenu[Idx]=true;
-		PBSend(6,  Idx,0);	
+		messageFCM(6,  Idx,0);	
 		}
 	}
 	}
@@ -595,7 +629,7 @@ void loop()
         timeClient.update(); 
         old_day =timeClient.getDay();
         //SendHTTPRequest("GET /sgdmdomo.php?action=listeperiode HTTP/1.1",1);
-        PBSend(10,0,1);
+        messageFCM(10,0,1);
     
       }
 	  }
@@ -650,18 +684,19 @@ void setup() {
   delay(1000);
   Serial.println("connecting...");
   timeClient.begin();
-  delay(3000);
+  delay(1000);
   timeClient.update();
   old_day = timeClient.getDay(); 
   old_day = 9; 
   SendHTTPRequest("GET /sgdmdomo.php?action=listeperiode HTTP/1.1",1);
   SendHTTPRequest("GET /sgdmdomo.php?action=listemax HTTP/1.1",2);
   
+  SendHTTPRequest("GET /sendFCM.html?message=10&arroseur=0 HTTP/1.1",3); 
   
   for (int xx = 0; xx < 5; xx++) 
     {
       Manuel[xx]=false;
       DemManuel[xx]=0;
     }
-	PBSend(9,0,0);
+	messageFCM(9,0,0);
 }
